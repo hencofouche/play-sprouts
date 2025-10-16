@@ -23,11 +23,29 @@ const handleApiError = (error: unknown, context: string): { error: string } => {
         return { error: "The API key you provided is invalid. Please check it in Parent Settings." };
     }
     if (message.toLowerCase().includes("quota")) {
-        return { error: "Your API key has exceeded its free quota. Please check your Google AI Studio account billing details or try again later." };
+        return { error: "Your API key has exceeded its free quota. Please check your Google AI Studio account billing details or try again later. Note: If running on a shared platform like Vercel, free tier quotas can sometimes be affected by shared server resources." };
     }
     
     return { error: `An unexpected error occurred: ${message}` };
 }
+
+export const testApiKey = async (apiKey: string): Promise<{ success: boolean; message: string }> => {
+    if (!apiKey.trim()) {
+        return { success: false, message: "API Key cannot be empty." };
+    }
+    try {
+        const ai = new GoogleGenAI({ apiKey });
+        // Make a minimal, low-token request to validate the key
+        await ai.models.generateContent({
+            model: "gemini-2.5-flash",
+            contents: "Hi",
+        });
+        return { success: true, message: "Success! Your API Key is valid and working." };
+    } catch (error) {
+        const handledError = handleApiError(error, 'testApiKey');
+        return { success: false, message: handledError.error };
+    }
+};
 
 
 // --- PLAY SPROUTS ---
@@ -62,14 +80,19 @@ export async function getImageForWord(word: string): Promise<string | null> {
 export async function generateUnapprovedWordAndImage(): Promise<{ word: string; imageUrl: string } | { error: string }> {
     try {
         const ai = getAiClient();
+        const existingWords = await db.getAllWords();
+        const exclusionList = existingWords.length > 0 ? ` It must not be one of these words: ${existingWords.join(', ')}.` : '';
+
         const wordResponse = await ai.models.generateContent({
             model: "gemini-2.5-flash",
-            contents: "Generate a single, simple, common, 3 to 5 letter English word for a kids reading game. Examples: cat, dog, sun, ball, tree. Just the word, no extra text.",
+            contents: `Generate a single, simple, common, 3 to 5 letter English word for a kids reading game. Examples: cat, dog, sun, ball, tree. Just the word, no extra text.${exclusionList}`,
         });
         const word = wordResponse.text.trim().toLowerCase().replace(/[^a-z]/g, '');
         if (!word) throw new Error("Generated word was empty.");
+        
+        // Final check in case the model ignores the instruction
         if (await db.getImageForWord(word)) {
-             return generateUnapprovedWordAndImage(); // Retry if word exists
+             return { error: `The AI suggested "${word.toUpperCase()}", which is already in the game. Please try again.` };
         }
 
         const prompt = `A simple, cute, cartoon vector illustration of a '${word}'. Joyful and friendly style for a children's reading game. Bright, vibrant colors. No text, letters, or words. The object should be isolated on a plain light-colored background.`;
@@ -120,14 +143,18 @@ export async function getMathItems(): Promise<db.MathItemRecord[]> {
 export async function generateUnapprovedMathItem(): Promise<{ name: string; imageUrl: string } | { error: string }> {
     try {
         const ai = getAiClient();
+        const existingItems = (await db.getAllMathItems()).map(item => item.name);
+        const exclusionList = existingItems.length > 0 ? ` It must not be one of these items: ${existingItems.join(', ')}.` : '';
+
         const nameResponse = await ai.models.generateContent({
             model: "gemini-2.5-flash",
-            contents: "Generate a single, simple, common object name for a kids' counting game. Examples: apple, star, car, boat, duck. Just the object name, no extra text.",
+            contents: `Generate a single, simple, common object name for a kids' counting game. Examples: apple, star, car, boat, duck. Just the object name, no extra text.${exclusionList}`,
         });
         const name = nameResponse.text.trim().toLowerCase().replace(/[^a-z]/g, '');
         if (!name) throw new Error("Generated name was empty.");
-        if ((await db.getAllMathItems()).some(item => item.name === name)) {
-             return generateUnapprovedMathItem();
+
+        if (existingItems.includes(name)) {
+             return { error: `The AI suggested "${name.toUpperCase()}", which is already in the game. Please try again.` };
         }
     
         const prompt = `A single, simple, cute, cartoon vector illustration of a '${name}'. For a kids counting game. Joyful and friendly style. Bright, vibrant colors. No text, letters, or words. Isolated on a plain light-colored background.`;
@@ -179,9 +206,12 @@ export async function getColorItems(): Promise<db.ColorItemRecord[]> {
 export async function generateUnapprovedColorItem(): Promise<{ name: string; color: string; imageUrl: string } | { error: string }> {
     try {
         const ai = getAiClient();
+        const existingItems = (await db.getAllColorItems()).map(item => item.name);
+        const exclusionList = existingItems.length > 0 ? ` The 'name' must not be one of these: ${existingItems.join(', ')}.` : '';
+
         const itemResponse = await ai.models.generateContent({
             model: "gemini-2.5-flash",
-            contents: "Generate a simple, common object and a primary color for it, for a kids' color matching game. Examples: { \"name\": \"apple\", \"color\": \"red\" }, { \"name\": \"frog\", \"color\": \"green\" }. Only return a single JSON object.",
+            contents: `Generate a simple, common object and a primary color for it, for a kids' color matching game. Examples: { "name": "apple", "color": "red" }, { "name": "frog", "color": "green" }. Only return a single JSON object.${exclusionList}`,
             config: {
                 responseMimeType: "application/json",
                 responseSchema: {
@@ -199,8 +229,8 @@ export async function generateUnapprovedColorItem(): Promise<{ name: string; col
         const color = result.color.trim().toLowerCase().replace(/[^a-z]/g, '');
         if (!name || !color) throw new Error("Generated name or color was empty.");
         
-        if ((await db.getAllColorItems()).some(item => item.name === name)) {
-            return generateUnapprovedColorItem(); // Retry
+        if (existingItems.includes(name)) {
+            return { error: `The AI suggested "${name.toUpperCase()}", which is already in the game. Please try again.` };
         }
     
         const prompt = `A simple, cute, cartoon vector illustration of a '${name}' that is primarily and clearly the color '${color}'. For a kids color matching game. Joyful and friendly style. No text or other objects. Isolated on a plain light-colored background.`;

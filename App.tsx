@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { GameState, GameMode } from './types';
-import { getWordList, getImageForWord, generateUnapprovedWordAndImage, generateImageForProvidedWord, getMathItems, generateImageForMathItem, getColorItems, generateImageForColorItem, generateUnapprovedMathItem, generateUnapprovedColorItem } from './services/geminiService';
+import { getWordList, getImageForWord, generateUnapprovedWordAndImage, generateImageForProvidedWord, getMathItems, generateImageForMathItem, getColorItems, generateImageForColorItem, generateUnapprovedMathItem, generateUnapprovedColorItem, testApiKey } from './services/geminiService';
 import { scrambleWord, shuffleArray } from './utils/wordHelper';
 // FIX: Refactored to named imports to resolve potential type resolution issues with namespace import.
 import {
@@ -219,47 +219,103 @@ const ModeSelection: React.FC<{ onSelect: (mode: GameMode) => void; onBack: () =
 
 // --- Settings Component and Sub-Components ---
 const ApiKeySettingsPanel: React.FC = () => {
-    const [apiKey, setApiKey] = useState('');
+    const [apiKeyInput, setApiKeyInput] = useState('');
+    const [storedKey, setStoredKey] = useState<string | null>(null);
     const [saveMessage, setSaveMessage] = useState('');
+    const [isTesting, setIsTesting] = useState(false);
+    const [testResult, setTestResult] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
 
     useEffect(() => {
-        const storedKey = localStorage.getItem(API_KEY_STORAGE_KEY);
-        if (storedKey) {
-            setApiKey(storedKey);
-        }
+        const key = localStorage.getItem(API_KEY_STORAGE_KEY);
+        setStoredKey(key);
     }, []);
 
     const handleSave = () => {
         playSound('click');
-        localStorage.setItem(API_KEY_STORAGE_KEY, apiKey);
+        localStorage.setItem(API_KEY_STORAGE_KEY, apiKeyInput);
+        setStoredKey(apiKeyInput);
+        setApiKeyInput('');
         setSaveMessage('API Key saved successfully!');
+        setTestResult(null); // Clear test result on save
         setTimeout(() => setSaveMessage(''), 3000);
+    };
+
+    const handleClear = () => {
+        playSound('click');
+        localStorage.removeItem(API_KEY_STORAGE_KEY);
+        setStoredKey(null);
+        setSaveMessage('API Key cleared.');
+        setTimeout(() => setSaveMessage(''), 3000);
+    };
+    
+    const handleTest = async () => {
+        playSound('click');
+        setIsTesting(true);
+        setTestResult(null);
+        const result = await testApiKey(apiKeyInput);
+        setTestResult({ message: result.message, type: result.success ? 'success' : 'error' });
+        setIsTesting(false);
+    };
+
+    const maskKey = (key: string) => {
+        if (key.length < 8) return '********';
+        return `${key.substring(0, 4)}...${key.substring(key.length - 4)}`;
     };
 
     return (
         <div className="space-y-4">
             <h3 className="text-xl font-bold text-gray-700">Manage API Key</h3>
-            <p className="text-gray-600">
-                The AI features of this app require a Google Gemini API key. You can get a free key from Google AI Studio.
-                Your key is stored securely in your browser and is never shared.
-            </p>
-            <div className="flex flex-col sm:flex-row gap-2">
+            {storedKey ? (
+                <div className="bg-green-100 p-4 rounded-lg border border-green-300 space-y-3">
+                    <p className="font-bold text-green-800">API Key is Active</p>
+                    <div className="flex items-center justify-between gap-4">
+                         <p className="text-gray-700 font-mono bg-white px-3 py-2 rounded shadow-inner text-sm break-all">{maskKey(storedKey)}</p>
+                         <button onClick={handleClear} className="px-4 py-2 bg-red-500 text-white font-bold rounded-md hover:bg-red-600 transition-colors shadow-md">
+                            Clear Key
+                        </button>
+                    </div>
+                </div>
+            ) : (
+                 <div className="bg-yellow-100 p-4 rounded-lg border border-yellow-300">
+                    <p className="text-yellow-800 font-semibold">
+                        The AI features require a Google Gemini API key. Get a free key from Google AI Studio.
+                        Your key is stored only in your browser and is never shared.
+                    </p>
+                </div>
+            )}
+           
+            <div className="flex flex-col sm:flex-row gap-2 items-start">
                 <input
                     type="password"
-                    value={apiKey}
-                    onChange={(e) => setApiKey(e.target.value)}
-                    placeholder="Enter your Google Gemini API Key"
+                    value={apiKeyInput}
+                    onChange={(e) => { setApiKeyInput(e.target.value); setTestResult(null); }}
+                    placeholder={storedKey ? "Enter new key to replace" : "Enter your Google Gemini API Key"}
                     className="flex-grow p-3 border-2 border-gray-300 rounded-md shadow-inner focus:ring-2 focus:ring-yellow-400 focus:border-yellow-400 outline-none"
                     aria-label="Gemini API Key Input"
                 />
-                <button
-                    onClick={handleSave}
-                    className="px-6 py-3 bg-yellow-500 text-white font-bold rounded-md hover:bg-yellow-600 disabled:bg-gray-400"
-                >
-                    Save Key
-                </button>
+                <div className="flex gap-2">
+                    <button
+                        onClick={handleTest}
+                        disabled={!apiKeyInput.trim() || isTesting}
+                        className="px-6 py-3 bg-blue-500 text-white font-bold rounded-md hover:bg-blue-600 disabled:bg-gray-400 transition-colors shadow-md"
+                    >
+                        {isTesting ? 'Testing...' : 'Test'}
+                    </button>
+                    <button
+                        onClick={handleSave}
+                        disabled={!apiKeyInput.trim()}
+                        className="px-6 py-3 bg-yellow-500 text-white font-bold rounded-md hover:bg-yellow-600 disabled:bg-gray-400 transition-colors shadow-md"
+                    >
+                        {storedKey ? 'Replace' : 'Save Key'}
+                    </button>
+                </div>
             </div>
-            {saveMessage && <p className="text-green-600 font-semibold">{saveMessage}</p>}
+            {testResult && (
+                <div className={`p-3 mt-2 rounded-md font-semibold ${testResult.type === 'success' ? 'bg-green-100 text-green-800 border border-green-300' : 'bg-red-100 text-red-800 border border-red-300'}`}>
+                    {testResult.message}
+                </div>
+            )}
+            {saveMessage && <p className="text-green-600 font-semibold pt-2">{saveMessage}</p>}
         </div>
     );
 };
@@ -491,8 +547,8 @@ const MathSettingsPanel: React.FC<{ onContentUpdate: () => void; }> = ({ onConte
             <div>
                 <h3 className="text-xl font-bold mb-2 text-gray-700">Manage Math Items ({itemList.length})</h3>
                 <div className="max-h-96 overflow-y-auto grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4 p-2 bg-gray-100 rounded-lg">
-                    {// FIX: Explicitly type the 'item' parameter as MathItemRecord to resolve properties on 'item' being treated as 'unknown'.
-                    itemList.map((item: MathItemRecord) => (
+                    {/* Fix: Explicitly type the 'item' parameter as MathItemRecord to resolve properties on 'item' being treated as 'unknown'. */}
+                    {itemList.map((item: MathItemRecord) => (
                         <div key={item.name} className="relative bg-white p-2 rounded-md shadow group">
                             <img src={item.image} alt={item.name} className="w-full h-24 object-contain rounded" />
                             <p className="text-center font-bold mt-1">{item.name.toUpperCase()}</p>
@@ -603,8 +659,8 @@ const ColorSettingsPanel: React.FC<{ onContentUpdate: () => void; }> = ({ onCont
             <div>
                 <h3 className="text-xl font-bold mb-2 text-gray-700">Manage Color Items ({itemList.length})</h3>
                 <div className="max-h-96 overflow-y-auto grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4 p-2 bg-gray-100 rounded-lg">
-                    {// FIX: Explicitly type the 'item' parameter as ColorItemRecord to resolve property 'color' not existing on type 'unknown'.
-                    itemList.map((item: ColorItemRecord) => (
+                    {/* Fix: Explicitly type the 'item' parameter as ColorItemRecord to resolve property 'color' not existing on type 'unknown'. */}
+                    {itemList.map((item: ColorItemRecord) => (
                         <div key={item.name} className="relative bg-white p-2 rounded-md shadow group">
                             <img src={item.image} alt={item.name} className="w-full h-24 object-contain rounded" />
                             <p className="text-center font-bold mt-1">{item.name.toUpperCase()}</p>
@@ -1000,8 +1056,8 @@ const App: React.FC = () => {
                                 <img src={colorProblem.item.image} alt={colorProblem.item.name} className="max-w-full max-h-full object-contain" />
                             </div>
                             <div className="flex flex-col sm:flex-row gap-4 mt-4">
-                                {// FIX: Explicitly type the 'option' parameter as a string to resolve 'toLowerCase' not existing on type 'unknown'.
-                                colorProblem.options.map((option: string) => (
+                                {/* Fix: Explicitly type the 'option' parameter as a string to resolve 'toLowerCase' not existing on type 'unknown'. */}
+                                {colorProblem.options.map((option: string) => (
                                     <button key={option} onClick={() => option === colorProblem.answer ? handleCorrectAnswer() : handleIncorrectAnswer()}
                                         className={`px-8 py-5 text-white text-3xl font-bold rounded-xl shadow-lg capitalize transform transition-transform hover:scale-105 ${colors[option.toLowerCase()] || 'bg-gray-500'} ${isIncorrectGuess && option !== colorProblem.answer ? 'opacity-50' : ''}`}>
                                         {option}
