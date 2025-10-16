@@ -216,14 +216,63 @@ const ModeSelection: React.FC<{ onSelect: (mode: GameMode) => void; onBack: () =
 );
 
 // --- Settings Component and Sub-Components ---
-// FIX: Removed ApiKeySettingsPanel as per coding guidelines, which prohibit UI for API key management.
+const API_KEY_STORAGE_KEY = 'gemini_api_key';
+
+const ApiKeySettingsPanel: React.FC = () => {
+    const [apiKey, setApiKey] = useState('');
+    const [isSaved, setIsSaved] = useState(false);
+
+    useEffect(() => {
+        const storedKey = localStorage.getItem(API_KEY_STORAGE_KEY);
+        if (storedKey) {
+            setApiKey(storedKey);
+        }
+    }, []);
+
+    const handleSave = () => {
+        playSound('click');
+        localStorage.setItem(API_KEY_STORAGE_KEY, apiKey);
+        setIsSaved(true);
+        setTimeout(() => setIsSaved(false), 2000); // Hide message after 2s
+    };
+
+    return (
+        <div className="space-y-4 text-left">
+            <h3 className="text-xl font-bold text-gray-700">Gemini API Key</h3>
+            <p className="text-gray-600">
+                To generate new words and images, you need to provide your own Google Gemini API key. 
+                You can get one from <a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">Google AI Studio</a>.
+            </p>
+            <div className="flex items-center gap-2">
+                <input 
+                    type="password" 
+                    value={apiKey}
+                    onChange={(e) => setApiKey(e.target.value)}
+                    placeholder="Enter your API key"
+                    className="flex-grow p-2 border rounded-md"
+                    aria-label="Gemini API Key Input"
+                />
+                <button 
+                    onClick={handleSave}
+                    className="px-6 py-2 bg-blue-500 text-white rounded-md hover:bg-blue-600"
+                >
+                    Save
+                </button>
+            </div>
+            {isSaved && <p className="text-green-600 font-bold">API Key saved successfully!</p>}
+            <p className="text-sm text-gray-500">
+                Your API key is stored securely in your browser's local storage and is never sent to a server.
+            </p>
+        </div>
+    );
+};
 const Settings: React.FC<{ onBack: () => void; onContentUpdate: () => void; }> = ({ onBack, onContentUpdate }) => {
     const [activeTab, setActiveTab] = useState<string>('play_sprouts');
-    // FIX: Removed 'API Key' tab from settings.
     const tabs: { id: string, name: string, color: string }[] = [
         { id: 'play_sprouts', name: 'Play Sprouts', color: 'blue' },
         { id: 'math_puzzles', name: 'Math Puzzles', color: 'green' },
         { id: 'color_quest', name: 'Color Quest', color: 'red' },
+        { id: 'api_key', name: 'API Key', color: 'gray' },
     ];
 
     const renderContent = () => {
@@ -231,7 +280,7 @@ const Settings: React.FC<{ onBack: () => void; onContentUpdate: () => void; }> =
             case 'play_sprouts': return <PlaySproutsSettingsPanel onContentUpdate={onContentUpdate} />;
             case 'math_puzzles': return <MathSettingsPanel onContentUpdate={onContentUpdate} />;
             case 'color_quest': return <ColorSettingsPanel onContentUpdate={onContentUpdate} />;
-            // FIX: Removed case for 'api_key'.
+            case 'api_key': return <ApiKeySettingsPanel />;
             default: return <PlaySproutsSettingsPanel onContentUpdate={onContentUpdate} />;
         }
     }
@@ -268,7 +317,6 @@ const PlaySproutsSettingsPanel: React.FC<{ onContentUpdate: () => void; }> = ({ 
         playSound('click');
         setIsLoading(true); setReviewItem(null); setError(null);
         const result = await generateUnapprovedWordAndImage();
-        // FIX: Corrected state update logic to properly handle discriminated union types returned from the API, resolving a TypeScript error. The `else` branch now correctly narrows the type.
         if ('error' in result) {
             setError(result.error);
         } else {
@@ -371,7 +419,6 @@ const MathSettingsPanel: React.FC<{ onContentUpdate: () => void; }> = ({ onConte
         playSound('click');
         setIsLoading(true); setReviewItem(null); setError(null);
         const result = await generateUnapprovedMathItem();
-        // FIX: Corrected state update logic to properly handle discriminated union types returned from the API, resolving a TypeScript error. The `else` branch now correctly narrows the type.
         if ('error' in result) {
             setError(result.error);
         } else {
@@ -446,7 +493,6 @@ const MathSettingsPanel: React.FC<{ onContentUpdate: () => void; }> = ({ onConte
             <div>
                 <h3 className="text-xl font-bold mb-2 text-gray-700">Manage Math Items ({itemList.length})</h3>
                 <div className="max-h-96 overflow-y-auto grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4 p-2 bg-gray-100 rounded-lg">
-                    {/* FIX: Explicitly type `item` to `MathItemRecord` to resolve properties on type `unknown`. */}
                     {itemList.map((item: MathItemRecord) => (
                         <div key={item.name} className="relative bg-white p-2 rounded-md shadow group">
                             <img src={item.image} alt={item.name} className="w-full h-24 object-contain rounded" />
@@ -476,7 +522,6 @@ const ColorSettingsPanel: React.FC<{ onContentUpdate: () => void; }> = ({ onCont
         playSound('click');
         setIsLoading(true); setReviewItem(null); setError(null);
         const result = await generateUnapprovedColorItem();
-        // FIX: Corrected state update logic to properly handle discriminated union types returned from the API, resolving a TypeScript error. The `else` branch now correctly narrows the type.
         if ('error' in result) {
             setError(result.error);
         } else {
@@ -559,7 +604,6 @@ const ColorSettingsPanel: React.FC<{ onContentUpdate: () => void; }> = ({ onCont
             <div>
                 <h3 className="text-xl font-bold mb-2 text-gray-700">Manage Color Items ({itemList.length})</h3>
                 <div className="max-h-96 overflow-y-auto grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4 p-2 bg-gray-100 rounded-lg">
-                    {/* FIX: Explicitly type `item` to `ColorItemRecord` to resolve property `color` on type `unknown`. */}
                     {itemList.map((item: ColorItemRecord) => (
                         <div key={item.name} className="relative bg-white p-2 rounded-md shadow group">
                             <img src={item.image} alt={item.name} className="w-full h-24 object-contain rounded" />
@@ -956,7 +1000,6 @@ const App: React.FC = () => {
                                 <img src={colorProblem.item.image} alt={colorProblem.item.name} className="max-w-full max-h-full object-contain" />
                             </div>
                             <div className="flex flex-col sm:flex-row gap-4 mt-4">
-                                {/* FIX: Explicitly type `option` to `string` to resolve `toLowerCase` not existing on type `unknown`. */}
                                 {colorProblem.options.map((option: string) => (
                                     <button key={option} onClick={() => option === colorProblem.answer ? handleCorrectAnswer() : handleIncorrectAnswer()}
                                         className={`px-8 py-5 text-white text-3xl font-bold rounded-xl shadow-lg capitalize transform transition-transform hover:scale-105 ${colors[option.toLowerCase()] || 'bg-gray-500'} ${isIncorrectGuess && option !== colorProblem.answer ? 'opacity-50' : ''}`}>
