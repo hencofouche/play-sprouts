@@ -1,3 +1,5 @@
+
+
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { GameState, GameMode } from './types';
 import { getWordList, getImageForWord, generateUnapprovedWordAndImage, generateImageForProvidedWord, getMathItems, generateImageForMathItem, getColorItems, generateImageForColorItem, generateUnapprovedMathItem, generateUnapprovedColorItem, testApiKey } from './services/geminiService';
@@ -61,6 +63,11 @@ const TrashIcon: React.FC<React.SVGProps<SVGSVGElement>> = (props) => (
 const SmallTrashIcon: React.FC<React.SVGProps<SVGSVGElement>> = (props) => (
     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" {...props}>
         <path fillRule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z" clipRule="evenodd" />
+    </svg>
+);
+const InfoIcon: React.FC<React.SVGProps<SVGSVGElement>> = (props) => (
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" {...props}>
+        <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
     </svg>
 );
 // --- UI Sub-Components ---
@@ -265,6 +272,15 @@ const ApiKeySettingsPanel: React.FC = () => {
     return (
         <div className="space-y-4">
             <h3 className="text-xl font-bold text-gray-700">Manage API Key</h3>
+            <div className="bg-blue-100 border-l-4 border-blue-500 text-blue-800 p-4 rounded-md flex items-start gap-3" role="alert">
+                <div className="flex-shrink-0">
+                    <InfoIcon className="h-6 w-6 text-blue-500" />
+                </div>
+                <div>
+                    <p className="font-bold">A Note on API Keys & Shared Platforms</p>
+                    <p className="text-sm">If you're using a free tier API key on a shared host (like Vercel), you might see "quota" errors. This is because free quotas can be shared across the platform's servers. If the 'Test' button works but other features fail, this is the likely reason.</p>
+                </div>
+            </div>
             {storedKey ? (
                 <div className="bg-green-100 p-4 rounded-lg border border-green-300 space-y-3">
                     <p className="font-bold text-green-800">API Key is Active</p>
@@ -547,7 +563,7 @@ const MathSettingsPanel: React.FC<{ onContentUpdate: () => void; }> = ({ onConte
             <div>
                 <h3 className="text-xl font-bold mb-2 text-gray-700">Manage Math Items ({itemList.length})</h3>
                 <div className="max-h-96 overflow-y-auto grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4 p-2 bg-gray-100 rounded-lg">
-                    {/* Fix: Explicitly type the 'item' parameter as MathItemRecord to resolve properties on 'item' being treated as 'unknown'. */}
+                    {/* FIX: Explicitly typing the 'item' parameter to 'MathItemRecord' resolves type errors where properties were being accessed on an 'unknown' type. */}
                     {itemList.map((item: MathItemRecord) => (
                         <div key={item.name} className="relative bg-white p-2 rounded-md shadow group">
                             <img src={item.image} alt={item.name} className="w-full h-24 object-contain rounded" />
@@ -659,7 +675,7 @@ const ColorSettingsPanel: React.FC<{ onContentUpdate: () => void; }> = ({ onCont
             <div>
                 <h3 className="text-xl font-bold mb-2 text-gray-700">Manage Color Items ({itemList.length})</h3>
                 <div className="max-h-96 overflow-y-auto grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4 p-2 bg-gray-100 rounded-lg">
-                    {/* Fix: Explicitly type the 'item' parameter as ColorItemRecord to resolve property 'color' not existing on type 'unknown'. */}
+                    {/* FIX: Explicitly typing the 'item' parameter to 'ColorItemRecord' resolves type errors where properties were being accessed on an 'unknown' type. */}
                     {itemList.map((item: ColorItemRecord) => (
                         <div key={item.name} className="relative bg-white p-2 rounded-md shadow group">
                             <img src={item.image} alt={item.name} className="w-full h-24 object-contain rounded" />
@@ -1056,7 +1072,7 @@ const App: React.FC = () => {
                                 <img src={colorProblem.item.image} alt={colorProblem.item.name} className="max-w-full max-h-full object-contain" />
                             </div>
                             <div className="flex flex-col sm:flex-row gap-4 mt-4">
-                                {/* Fix: Explicitly type the 'option' parameter as a string to resolve 'toLowerCase' not existing on type 'unknown'. */}
+                                {/* FIX: Explicitly typing the 'option' parameter as a string allows using string methods on what was an 'unknown' type. */}
                                 {colorProblem.options.map((option: string) => (
                                     <button key={option} onClick={() => option === colorProblem.answer ? handleCorrectAnswer() : handleIncorrectAnswer()}
                                         className={`px-8 py-5 text-white text-3xl font-bold rounded-xl shadow-lg capitalize transform transition-transform hover:scale-105 ${colors[option.toLowerCase()] || 'bg-gray-500'} ${isIncorrectGuess && option !== colorProblem.answer ? 'opacity-50' : ''}`}>

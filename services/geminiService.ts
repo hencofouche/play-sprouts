@@ -1,4 +1,4 @@
-import { GoogleGenAI, Type, Modality } from "@google/genai";
+import { GoogleGenAI, Type } from "@google/genai";
 import * as db from '../db/indexedDB';
 import { shuffleArray } from "../utils/wordHelper";
 
@@ -23,7 +23,10 @@ const handleApiError = (error: unknown, context: string): { error: string } => {
         return { error: "The API key you provided is invalid. Please check it in Parent Settings." };
     }
     if (message.toLowerCase().includes("quota")) {
-        return { error: "Your API key has exceeded its free quota. Please check your Google AI Studio account billing details or try again later. Note: If running on a shared platform like Vercel, free tier quotas can sometimes be affected by shared server resources." };
+        if (message.includes("limit: 0")) {
+            return { error: "Your API key does not have access to this model on the free tier. The model returned a usage limit of 0. Please check your Google AI Studio account for model availability." };
+        }
+        return { error: "Your API key has exceeded its free quota. Please check your Google AI Studio account billing details or try again later. Note: If this app is hosted on a shared platform (like Vercel), free tier API quotas may be exhausted due to shared server resources, even if your personal usage is low." };
     }
     
     return { error: `An unexpected error occurred: ${message}` };
@@ -33,18 +36,45 @@ export const testApiKey = async (apiKey: string): Promise<{ success: boolean; me
     if (!apiKey.trim()) {
         return { success: false, message: "API Key cannot be empty." };
     }
+
+    const ai = new GoogleGenAI({ apiKey });
+
+    // 1. Test Text Generation
     try {
-        const ai = new GoogleGenAI({ apiKey });
-        // Make a minimal, low-token request to validate the key
         await ai.models.generateContent({
-            model: "gemini-2.5-flash",
+            model: "gemini-flash-latest",
             contents: "Hi",
         });
-        return { success: true, message: "Success! Your API Key is valid and working." };
     } catch (error) {
-        const handledError = handleApiError(error, 'testApiKey');
-        return { success: false, message: handledError.error };
+        const handledError = handleApiError(error, 'testApiKey (text)');
+        return { success: false, message: `Text Model Error: ${handledError.error}` };
     }
+
+    // 2. Test Image Generation
+    try {
+        const imageResponse = await ai.models.generateImages({
+            model: 'imagen-4.0-generate-001',
+            prompt: 'a small blue circle',
+            config: {
+                numberOfImages: 1,
+                outputMimeType: 'image/png',
+            },
+        });
+
+        if (!imageResponse.generatedImages?.[0]?.image?.imageBytes) {
+            throw new Error("No image data received in test.");
+        }
+    } catch (error) {
+        // If the text part worked, but this fails, it's likely an image quota issue.
+        const handledError = handleApiError(error, 'testApiKey (image)');
+        return { 
+            success: false, 
+            message: `Text generation succeeded, but image generation failed. This often means your API key's free quota for image models is exhausted. Error: ${handledError.error}` 
+        };
+    }
+
+    // 3. If both succeed
+    return { success: true, message: "Success! Your API Key is valid for both text and image generation." };
 };
 
 
@@ -84,7 +114,7 @@ export async function generateUnapprovedWordAndImage(): Promise<{ word: string; 
         const exclusionList = existingWords.length > 0 ? ` It must not be one of these words: ${existingWords.join(', ')}.` : '';
 
         const wordResponse = await ai.models.generateContent({
-            model: "gemini-2.5-flash",
+            model: "gemini-flash-latest",
             contents: `Generate a single, simple, common, 3 to 5 letter English word for a kids reading game. Examples: cat, dog, sun, ball, tree. Just the word, no extra text.${exclusionList}`,
         });
         const word = wordResponse.text.trim().toLowerCase().replace(/[^a-z]/g, '');
@@ -96,13 +126,17 @@ export async function generateUnapprovedWordAndImage(): Promise<{ word: string; 
         }
 
         const prompt = `A simple, cute, cartoon vector illustration of a '${word}'. Joyful and friendly style for a children's reading game. Bright, vibrant colors. No text, letters, or words. The object should be isolated on a plain light-colored background.`;
-        const imageResponse = await ai.models.generateContent({
-            model: 'gemini-2.5-flash-image', contents: { parts: [{ text: prompt }] }, config: { responseModalities: [Modality.IMAGE] }
+        const imageResponse = await ai.models.generateImages({
+            model: 'imagen-4.0-generate-001',
+            prompt: prompt,
+            config: {
+                numberOfImages: 1,
+                outputMimeType: 'image/png',
+            },
         });
 
-        const part = imageResponse.candidates[0].content.parts.find(p => p.inlineData);
-        if (part?.inlineData) {
-            const imageUrl = `data:image/png;base64,${part.inlineData.data}`;
+        if (imageResponse.generatedImages?.[0]?.image?.imageBytes) {
+            const imageUrl = `data:image/png;base64,${imageResponse.generatedImages[0].image.imageBytes}`;
             return { word, imageUrl };
         }
         throw new Error("No image data found in response");
@@ -120,12 +154,16 @@ export async function generateImageForProvidedWord(word: string): Promise<{ word
         const ai = getAiClient();
         const prompt = `A simple, cute, cartoon vector illustration of a '${sanitizedWord}'. Joyful and friendly style for a children's reading game. Bright, vibrant colors. No text, letters, or words. The object should be isolated on a plain light-colored background.`;
         
-        const response = await ai.models.generateContent({
-            model: 'gemini-2.5-flash-image', contents: { parts: [{ text: prompt }] }, config: { responseModalities: [Modality.IMAGE] }
+        const response = await ai.models.generateImages({
+            model: 'imagen-4.0-generate-001',
+            prompt: prompt,
+            config: {
+                numberOfImages: 1,
+                outputMimeType: 'image/png',
+            },
         });
-        const part = response.candidates[0].content.parts.find(p => p.inlineData);
-        if (part?.inlineData) {
-            const imageUrl = `data:image/png;base64,${part.inlineData.data}`;
+        if (response.generatedImages?.[0]?.image?.imageBytes) {
+            const imageUrl = `data:image/png;base64,${response.generatedImages[0].image.imageBytes}`;
             return { word: sanitizedWord, imageUrl };
         }
         throw new Error("No image data found in response");
@@ -147,7 +185,7 @@ export async function generateUnapprovedMathItem(): Promise<{ name: string; imag
         const exclusionList = existingItems.length > 0 ? ` It must not be one of these items: ${existingItems.join(', ')}.` : '';
 
         const nameResponse = await ai.models.generateContent({
-            model: "gemini-2.5-flash",
+            model: "gemini-flash-latest",
             contents: `Generate a single, simple, common object name for a kids' counting game. Examples: apple, star, car, boat, duck. Just the object name, no extra text.${exclusionList}`,
         });
         const name = nameResponse.text.trim().toLowerCase().replace(/[^a-z]/g, '');
@@ -158,11 +196,17 @@ export async function generateUnapprovedMathItem(): Promise<{ name: string; imag
         }
     
         const prompt = `A single, simple, cute, cartoon vector illustration of a '${name}'. For a kids counting game. Joyful and friendly style. Bright, vibrant colors. No text, letters, or words. Isolated on a plain light-colored background.`;
-        const imageResponse = await ai.models.generateContent({ model: 'gemini-2.5-flash-image', contents: { parts: [{ text: prompt }] }, config: { responseModalities: [Modality.IMAGE] } });
+        const imageResponse = await ai.models.generateImages({
+            model: 'imagen-4.0-generate-001',
+            prompt: prompt,
+            config: {
+                numberOfImages: 1,
+                outputMimeType: 'image/png',
+            },
+        });
         
-        const part = imageResponse.candidates[0].content.parts.find(p => p.inlineData);
-        if (part?.inlineData) {
-            const imageUrl = `data:image/png;base64,${part.inlineData.data}`;
+        if (imageResponse.generatedImages?.[0]?.image?.imageBytes) {
+            const imageUrl = `data:image/png;base64,${imageResponse.generatedImages[0].image.imageBytes}`;
             return { name, imageUrl };
         }
         throw new Error("No image data found");
@@ -184,11 +228,17 @@ export async function generateImageForMathItem(name: string): Promise<{ name: st
     try {
         const ai = getAiClient();
         const prompt = `A single, simple, cute, cartoon vector illustration of a '${sanitizedName}'. For a kids counting game. Joyful and friendly style. Bright, vibrant colors. No text, letters, or words. Isolated on a plain light-colored background.`;
-        const response = await ai.models.generateContent({ model: 'gemini-2.5-flash-image', contents: { parts: [{ text: prompt }] }, config: { responseModalities: [Modality.IMAGE] } });
+        const response = await ai.models.generateImages({
+            model: 'imagen-4.0-generate-001',
+            prompt: prompt,
+            config: {
+                numberOfImages: 1,
+                outputMimeType: 'image/png',
+            },
+        });
         
-        const part = response.candidates[0].content.parts.find(p => p.inlineData);
-        if (part?.inlineData) {
-            const imageUrl = `data:image/png;base64,${part.inlineData.data}`;
+        if (response.generatedImages?.[0]?.image?.imageBytes) {
+            const imageUrl = `data:image/png;base64,${response.generatedImages[0].image.imageBytes}`;
             return { name: sanitizedName, imageUrl };
         }
         throw new Error("No image data found");
@@ -210,7 +260,7 @@ export async function generateUnapprovedColorItem(): Promise<{ name: string; col
         const exclusionList = existingItems.length > 0 ? ` The 'name' must not be one of these: ${existingItems.join(', ')}.` : '';
 
         const itemResponse = await ai.models.generateContent({
-            model: "gemini-2.5-flash",
+            model: "gemini-flash-latest",
             contents: `Generate a simple, common object and a primary color for it, for a kids' color matching game. Examples: { "name": "apple", "color": "red" }, { "name": "frog", "color": "green" }. Only return a single JSON object.${exclusionList}`,
             config: {
                 responseMimeType: "application/json",
@@ -234,11 +284,17 @@ export async function generateUnapprovedColorItem(): Promise<{ name: string; col
         }
     
         const prompt = `A simple, cute, cartoon vector illustration of a '${name}' that is primarily and clearly the color '${color}'. For a kids color matching game. Joyful and friendly style. No text or other objects. Isolated on a plain light-colored background.`;
-        const imageResponse = await ai.models.generateContent({ model: 'gemini-2.5-flash-image', contents: { parts: [{ text: prompt }] }, config: { responseModalities: [Modality.IMAGE] } });
+        const imageResponse = await ai.models.generateImages({
+            model: 'imagen-4.0-generate-001',
+            prompt: prompt,
+            config: {
+                numberOfImages: 1,
+                outputMimeType: 'image/png',
+            },
+        });
         
-        const part = imageResponse.candidates[0].content.parts.find(p => p.inlineData);
-        if (part?.inlineData) {
-            const imageUrl = `data:image/png;base64,${part.inlineData.data}`;
+        if (imageResponse.generatedImages?.[0]?.image?.imageBytes) {
+            const imageUrl = `data:image/png;base64,${imageResponse.generatedImages[0].image.imageBytes}`;
             return { name, color, imageUrl };
         }
         throw new Error("No image data found");
@@ -260,11 +316,17 @@ export async function generateImageForColorItem(name: string, color: string): Pr
     try {
         const ai = getAiClient();
         const prompt = `A simple, cute, cartoon vector illustration of a '${sanitizedName}' that is primarily and clearly the color '${sanitizedColor}'. For a kids color matching game. Joyful and friendly style. No text or other objects. Isolated on a plain light-colored background.`;
-        const response = await ai.models.generateContent({ model: 'gemini-2.5-flash-image', contents: { parts: [{ text: prompt }] }, config: { responseModalities: [Modality.IMAGE] } });
+        const response = await ai.models.generateImages({
+            model: 'imagen-4.0-generate-001',
+            prompt: prompt,
+            config: {
+                numberOfImages: 1,
+                outputMimeType: 'image/png',
+            },
+        });
 
-        const part = response.candidates[0].content.parts.find(p => p.inlineData);
-        if (part?.inlineData) {
-            const imageUrl = `data:image/png;base64,${part.inlineData.data}`;
+        if (response.generatedImages?.[0]?.image?.imageBytes) {
+            const imageUrl = `data:image/png;base64,${response.generatedImages[0].image.imageBytes}`;
             return { name: sanitizedName, color: sanitizedColor, imageUrl };
         }
         throw new Error("No image data found");
