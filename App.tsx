@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { GameState, GameMode } from './types';
 import { getWordList, getImageForWord, generateUnapprovedWordAndImage, generateImageForProvidedWord, getMathItems, generateImageForMathItem, getColorItems, generateImageForColorItem, generateUnapprovedMathItem, generateUnapprovedColorItem } from './services/geminiService';
@@ -217,20 +216,23 @@ const ModeSelection: React.FC<{ onSelect: (mode: GameMode) => void; onBack: () =
 );
 
 // --- Settings Component and Sub-Components ---
+// FIX: Removed ApiKeySettingsPanel as per coding guidelines, which prohibit UI for API key management.
 const Settings: React.FC<{ onBack: () => void; onContentUpdate: () => void; }> = ({ onBack, onContentUpdate }) => {
-    const [activeTab, setActiveTab] = useState<GameMode>(GameMode.WORD_SPROUTS);
-    const tabs: { mode: GameMode, name: string, color: string }[] = [
-        { mode: GameMode.WORD_SPROUTS, name: 'Play Sprouts', color: 'blue' },
-        { mode: GameMode.MATH_ADDITION, name: 'Math Puzzles', color: 'green' },
-        { mode: GameMode.COLOR_MATCHING, name: 'Color Quest', color: 'red' },
+    const [activeTab, setActiveTab] = useState<string>('play_sprouts');
+    // FIX: Removed 'API Key' tab from settings.
+    const tabs: { id: string, name: string, color: string }[] = [
+        { id: 'play_sprouts', name: 'Play Sprouts', color: 'blue' },
+        { id: 'math_puzzles', name: 'Math Puzzles', color: 'green' },
+        { id: 'color_quest', name: 'Color Quest', color: 'red' },
     ];
 
     const renderContent = () => {
         switch (activeTab) {
-            case GameMode.WORD_SPROUTS: return <PlaySproutsSettingsPanel onContentUpdate={onContentUpdate} />;
-            case GameMode.MATH_ADDITION: return <MathSettingsPanel onContentUpdate={onContentUpdate} />;
-            case GameMode.COLOR_MATCHING: return <ColorSettingsPanel onContentUpdate={onContentUpdate} />;
-            default: return null;
+            case 'play_sprouts': return <PlaySproutsSettingsPanel onContentUpdate={onContentUpdate} />;
+            case 'math_puzzles': return <MathSettingsPanel onContentUpdate={onContentUpdate} />;
+            case 'color_quest': return <ColorSettingsPanel onContentUpdate={onContentUpdate} />;
+            // FIX: Removed case for 'api_key'.
+            default: return <PlaySproutsSettingsPanel onContentUpdate={onContentUpdate} />;
         }
     }
 
@@ -242,8 +244,8 @@ const Settings: React.FC<{ onBack: () => void; onContentUpdate: () => void; }> =
             </div>
             <div className="flex flex-wrap border-b-2 border-gray-200">
                 {tabs.map(tab => (
-                    <button key={tab.mode} onClick={() => { playSound('click'); setActiveTab(tab.mode); }}
-                        className={`px-4 sm:px-6 py-3 text-base sm:text-lg font-bold transition-colors ${activeTab === tab.mode ? `border-b-4 border-${tab.color}-500 text-${tab.color}-600` : 'text-gray-500 hover:bg-gray-100'}`}>
+                    <button key={tab.id} onClick={() => { playSound('click'); setActiveTab(tab.id); }}
+                        className={`px-4 sm:px-6 py-3 text-base sm:text-lg font-bold transition-colors ${activeTab === tab.id ? `border-b-4 border-${tab.color}-500 text-${tab.color}-600` : 'text-gray-500 hover:bg-gray-100'}`}>
                         {tab.name}
                     </button>
                 ))}
@@ -444,8 +446,7 @@ const MathSettingsPanel: React.FC<{ onContentUpdate: () => void; }> = ({ onConte
             <div>
                 <h3 className="text-xl font-bold mb-2 text-gray-700">Manage Math Items ({itemList.length})</h3>
                 <div className="max-h-96 overflow-y-auto grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4 p-2 bg-gray-100 rounded-lg">
-                    {/* FIX: Explicitly type `item` to resolve properties `name` and `image` not being found on type `unknown`. */}
-                    {/* FIX: Explicitly type `item` to resolve properties `name` and `image` not being found on type `unknown`. */}
+                    {/* FIX: Explicitly type `item` to `MathItemRecord` to resolve properties on type `unknown`. */}
                     {itemList.map((item: MathItemRecord) => (
                         <div key={item.name} className="relative bg-white p-2 rounded-md shadow group">
                             <img src={item.image} alt={item.name} className="w-full h-24 object-contain rounded" />
@@ -558,8 +559,7 @@ const ColorSettingsPanel: React.FC<{ onContentUpdate: () => void; }> = ({ onCont
             <div>
                 <h3 className="text-xl font-bold mb-2 text-gray-700">Manage Color Items ({itemList.length})</h3>
                 <div className="max-h-96 overflow-y-auto grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4 p-2 bg-gray-100 rounded-lg">
-                    {/* FIX: Explicitly type `item` to resolve property `color` not being found on type `unknown`. */}
-                    {/* FIX: Explicitly type `item` to resolve property `color` not being found on type `unknown`. */}
+                    {/* FIX: Explicitly type `item` to `ColorItemRecord` to resolve property `color` on type `unknown`. */}
                     {itemList.map((item: ColorItemRecord) => (
                         <div key={item.name} className="relative bg-white p-2 rounded-md shadow group">
                             <img src={item.image} alt={item.name} className="w-full h-24 object-contain rounded" />
@@ -956,7 +956,6 @@ const App: React.FC = () => {
                                 <img src={colorProblem.item.image} alt={colorProblem.item.name} className="max-w-full max-h-full object-contain" />
                             </div>
                             <div className="flex flex-col sm:flex-row gap-4 mt-4">
-                                {/* FIX: Explicitly type `option` to `string` to resolve `toLowerCase` not existing on type `unknown`. */}
                                 {/* FIX: Explicitly type `option` to `string` to resolve `toLowerCase` not existing on type `unknown`. */}
                                 {colorProblem.options.map((option: string) => (
                                     <button key={option} onClick={() => option === colorProblem.answer ? handleCorrectAnswer() : handleIncorrectAnswer()}

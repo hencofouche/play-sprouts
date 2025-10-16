@@ -2,10 +2,10 @@ import { GoogleGenAI, Type, Modality } from "@google/genai";
 import * as db from '../db/indexedDB';
 import { shuffleArray } from "../utils/wordHelper";
 
-// WARNING: Hardcoding API keys is a major security risk and not recommended for production.
-// This was done per an explicit user request for their specific publishing environment.
-// It is strongly advised to use environment variables or a secure secret management service.
-const ai = new GoogleGenAI({ apiKey: 'AIzaSyAj67X-qMs8qQkSRH_p0VT_d1Hmgc-EynQ' });
+// FIX: Per coding guidelines, initialize GoogleGenAI with API key from environment variables.
+// This single instance will be used for all service calls.
+const ai = new GoogleGenAI({ apiKey: process.env.API_KEY! });
+
 
 // --- PLAY SPROUTS ---
 
@@ -37,6 +37,7 @@ export async function getImageForWord(word: string): Promise<string | null> {
 }
 
 export async function generateUnapprovedWordAndImage(): Promise<{ word: string; imageUrl: string } | { error: string }> {
+    // FIX: Removed local getAiClient() call and associated try-catch block.
     let word = '';
     try {
         const response = await ai.models.generateContent({
@@ -50,13 +51,15 @@ export async function generateUnapprovedWordAndImage(): Promise<{ word: string; 
         }
     } catch (error) {
         console.error("Error generating word:", error);
-        return { error: "Could not generate a new word. Please check your API key and connection." };
+        // FIX: Removed API key specific error message as key is now handled by environment.
+        return { error: "Could not generate a new word. Please check your connection." };
     }
     
     return generateImageForProvidedWord(word);
 }
 
 export async function generateImageForProvidedWord(word: string): Promise<{ word: string; imageUrl:string } | { error: string }> {
+    // FIX: Removed local getAiClient() call and associated try-catch block.
     const sanitizedWord = word.trim().toLowerCase().replace(/[^a-z]/g, '');
     if (!sanitizedWord) return { error: "Please enter a valid word (letters only)." };
     if (await db.getImageForWord(sanitizedWord)) return { error: `'${sanitizedWord.toUpperCase()}' is already in the game!` };
@@ -75,6 +78,7 @@ export async function generateImageForProvidedWord(word: string): Promise<{ word
         throw new Error("No image data found in response");
     } catch (error) {
         console.error(`Error generating image for ${sanitizedWord}:`, error);
+        // FIX: Removed API key specific error message.
         return { error: `Could not generate an image for "${sanitizedWord}". Please try again.` };
     }
 }
@@ -86,6 +90,7 @@ export async function getMathItems(): Promise<db.MathItemRecord[]> {
 }
 
 export async function generateUnapprovedMathItem(): Promise<{ name: string; imageUrl: string } | { error: string }> {
+    // FIX: Removed local getAiClient() call and associated try-catch block.
     let name = '';
     try {
         const response = await ai.models.generateContent({
@@ -99,7 +104,8 @@ export async function generateUnapprovedMathItem(): Promise<{ name: string; imag
         }
     } catch (error) {
         console.error("Error generating math item name:", error);
-        return { error: "Could not generate a new item name. Please check your API key and connection." };
+        // FIX: Removed API key specific error message.
+        return { error: "Could not generate a new item name. Please check your connection." };
     }
     
     const prompt = `A single, simple, cute, cartoon vector illustration of a '${name}'. For a kids counting game. Joyful and friendly style. Bright, vibrant colors. No text, letters, or words. Isolated on a plain light-colored background.`;
@@ -114,12 +120,14 @@ export async function generateUnapprovedMathItem(): Promise<{ name: string; imag
         throw new Error("No image data found");
     } catch (error) {
         console.error(`Error generating image for math item ${name}:`, error);
+        // FIX: Removed API key specific error message.
         return { error: `Could not generate an image for "${name}". Please try again.` };
     }
 }
 
 
 export async function generateImageForMathItem(name: string): Promise<{ name: string; imageUrl: string } | { error: string }> {
+    // FIX: Removed local getAiClient() call and associated try-catch block.
     const sanitizedName = name.trim().toLowerCase().replace(/[^a-z]/g, '');
     if (!sanitizedName) return { error: "Please enter a valid item name (letters only)." };
     
@@ -140,6 +148,7 @@ export async function generateImageForMathItem(name: string): Promise<{ name: st
         throw new Error("No image data found");
     } catch (error) {
         console.error(`Error generating image for math item ${sanitizedName}:`, error);
+        // FIX: Removed API key specific error message.
         return { error: `Could not generate an image for "${sanitizedName}". Please try again.` };
     }
 }
@@ -151,6 +160,7 @@ export async function getColorItems(): Promise<db.ColorItemRecord[]> {
 }
 
 export async function generateUnapprovedColorItem(): Promise<{ name: string; color: string; imageUrl: string } | { error: string }> {
+    // FIX: Removed local getAiClient() call and associated try-catch block.
     let name = '';
     let color = '';
     try {
@@ -179,7 +189,8 @@ export async function generateUnapprovedColorItem(): Promise<{ name: string; col
         }
     } catch (error) {
         console.error("Error generating color item:", error);
-        return { error: "Could not generate a new item. Please check your API key and connection." };
+        // FIX: Removed API key specific error message.
+        return { error: "Could not generate a new item. Please check your connection." };
     }
     
     const prompt = `A simple, cute, cartoon vector illustration of a '${name}' that is primarily and clearly the color '${color}'. For a kids color matching game. Joyful and friendly style. No text or other objects. Isolated on a plain light-colored background.`;
@@ -194,11 +205,13 @@ export async function generateUnapprovedColorItem(): Promise<{ name: string; col
         throw new Error("No image data found");
     } catch (error) {
         console.error(`Error generating image for color item ${name}:`, error);
+        // FIX: Removed API key specific error message.
         return { error: `Could not generate an image for "${name}". Please try again.` };
     }
 }
 
 export async function generateImageForColorItem(name: string, color: string): Promise<{ name: string, color: string, imageUrl: string } | { error: string }> {
+    // FIX: Removed local getAiClient() call and associated try-catch block.
     const sanitizedName = name.trim().toLowerCase().replace(/[^a-z]/g, '');
     const sanitizedColor = color.trim().toLowerCase();
     if (!sanitizedName || !sanitizedColor) return { error: "Please enter a valid item name and color." };
@@ -220,6 +233,7 @@ export async function generateImageForColorItem(name: string, color: string): Pr
         throw new Error("No image data found");
     } catch (error) {
         console.error(`Error generating image for color item ${sanitizedName}:`, error);
+        // FIX: Removed API key specific error message.
         return { error: `Could not generate an image for "${sanitizedName}". Please try again.` };
     }
 }
