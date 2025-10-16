@@ -19,6 +19,8 @@ import {
 } from './db/indexedDB';
 import { playSound } from './utils/sound';
 
+const API_KEY_STORAGE_KEY = 'gemini_api_key';
+
 // --- Reusable Icon Components ---
 const StarIcon: React.FC<React.SVGProps<SVGSVGElement>> = (props) => (
   <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 inline-block mr-2 text-yellow-400" viewBox="0 0 20 20" fill="currentColor" {...props}>
@@ -216,12 +218,59 @@ const ModeSelection: React.FC<{ onSelect: (mode: GameMode) => void; onBack: () =
 );
 
 // --- Settings Component and Sub-Components ---
+const ApiKeySettingsPanel: React.FC = () => {
+    const [apiKey, setApiKey] = useState('');
+    const [saveMessage, setSaveMessage] = useState('');
+
+    useEffect(() => {
+        const storedKey = localStorage.getItem(API_KEY_STORAGE_KEY);
+        if (storedKey) {
+            setApiKey(storedKey);
+        }
+    }, []);
+
+    const handleSave = () => {
+        playSound('click');
+        localStorage.setItem(API_KEY_STORAGE_KEY, apiKey);
+        setSaveMessage('API Key saved successfully!');
+        setTimeout(() => setSaveMessage(''), 3000);
+    };
+
+    return (
+        <div className="space-y-4">
+            <h3 className="text-xl font-bold text-gray-700">Manage API Key</h3>
+            <p className="text-gray-600">
+                The AI features of this app require a Google Gemini API key. You can get a free key from Google AI Studio.
+                Your key is stored securely in your browser and is never shared.
+            </p>
+            <div className="flex flex-col sm:flex-row gap-2">
+                <input
+                    type="password"
+                    value={apiKey}
+                    onChange={(e) => setApiKey(e.target.value)}
+                    placeholder="Enter your Google Gemini API Key"
+                    className="flex-grow p-3 border-2 border-gray-300 rounded-md shadow-inner focus:ring-2 focus:ring-yellow-400 focus:border-yellow-400 outline-none"
+                    aria-label="Gemini API Key Input"
+                />
+                <button
+                    onClick={handleSave}
+                    className="px-6 py-3 bg-yellow-500 text-white font-bold rounded-md hover:bg-yellow-600 disabled:bg-gray-400"
+                >
+                    Save Key
+                </button>
+            </div>
+            {saveMessage && <p className="text-green-600 font-semibold">{saveMessage}</p>}
+        </div>
+    );
+};
+
 const Settings: React.FC<{ onBack: () => void; onContentUpdate: () => void; }> = ({ onBack, onContentUpdate }) => {
     const [activeTab, setActiveTab] = useState<string>('play_sprouts');
     const tabs: { id: string, name: string, color: string }[] = [
         { id: 'play_sprouts', name: 'Play Sprouts', color: 'blue' },
         { id: 'math_puzzles', name: 'Math Puzzles', color: 'green' },
         { id: 'color_quest', name: 'Color Quest', color: 'red' },
+        { id: 'api_key', name: 'API Key', color: 'yellow' },
     ];
 
     const renderContent = () => {
@@ -229,6 +278,7 @@ const Settings: React.FC<{ onBack: () => void; onContentUpdate: () => void; }> =
             case 'play_sprouts': return <PlaySproutsSettingsPanel onContentUpdate={onContentUpdate} />;
             case 'math_puzzles': return <MathSettingsPanel onContentUpdate={onContentUpdate} />;
             case 'color_quest': return <ColorSettingsPanel onContentUpdate={onContentUpdate} />;
+            case 'api_key': return <ApiKeySettingsPanel />;
             default: return <PlaySproutsSettingsPanel onContentUpdate={onContentUpdate} />;
         }
     }
@@ -441,9 +491,8 @@ const MathSettingsPanel: React.FC<{ onContentUpdate: () => void; }> = ({ onConte
             <div>
                 <h3 className="text-xl font-bold mb-2 text-gray-700">Manage Math Items ({itemList.length})</h3>
                 <div className="max-h-96 overflow-y-auto grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4 p-2 bg-gray-100 rounded-lg">
-                    {// FIX: Explicitly typing the 'item' parameter fixes an issue where its type was not being inferred correctly.
-}
-                    {itemList.map((item: MathItemRecord) => (
+                    {// FIX: Explicitly type the 'item' parameter as MathItemRecord to resolve properties on 'item' being treated as 'unknown'.
+                    itemList.map((item: MathItemRecord) => (
                         <div key={item.name} className="relative bg-white p-2 rounded-md shadow group">
                             <img src={item.image} alt={item.name} className="w-full h-24 object-contain rounded" />
                             <p className="text-center font-bold mt-1">{item.name.toUpperCase()}</p>
@@ -554,9 +603,8 @@ const ColorSettingsPanel: React.FC<{ onContentUpdate: () => void; }> = ({ onCont
             <div>
                 <h3 className="text-xl font-bold mb-2 text-gray-700">Manage Color Items ({itemList.length})</h3>
                 <div className="max-h-96 overflow-y-auto grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4 p-2 bg-gray-100 rounded-lg">
-                    {// FIX: Explicitly typing the 'item' parameter fixes an issue where its type was not being inferred correctly.
-}
-                    {itemList.map((item: ColorItemRecord) => (
+                    {// FIX: Explicitly type the 'item' parameter as ColorItemRecord to resolve property 'color' not existing on type 'unknown'.
+                    itemList.map((item: ColorItemRecord) => (
                         <div key={item.name} className="relative bg-white p-2 rounded-md shadow group">
                             <img src={item.image} alt={item.name} className="w-full h-24 object-contain rounded" />
                             <p className="text-center font-bold mt-1">{item.name.toUpperCase()}</p>
@@ -952,9 +1000,8 @@ const App: React.FC = () => {
                                 <img src={colorProblem.item.image} alt={colorProblem.item.name} className="max-w-full max-h-full object-contain" />
                             </div>
                             <div className="flex flex-col sm:flex-row gap-4 mt-4">
-                                {// FIX: Explicitly typing the 'option' parameter fixes an issue where its type was not being inferred correctly.
-}
-                                {colorProblem.options.map((option: string) => (
+                                {// FIX: Explicitly type the 'option' parameter as a string to resolve 'toLowerCase' not existing on type 'unknown'.
+                                colorProblem.options.map((option: string) => (
                                     <button key={option} onClick={() => option === colorProblem.answer ? handleCorrectAnswer() : handleIncorrectAnswer()}
                                         className={`px-8 py-5 text-white text-3xl font-bold rounded-xl shadow-lg capitalize transform transition-transform hover:scale-105 ${colors[option.toLowerCase()] || 'bg-gray-500'} ${isIncorrectGuess && option !== colorProblem.answer ? 'opacity-50' : ''}`}>
                                         {option}
