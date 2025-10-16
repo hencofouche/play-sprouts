@@ -1,0 +1,21 @@
+{
+  "short_name": "Play Sprouts",
+  "name": "Play Sprouts: Reading Adventure",
+  "description": "A fun and colorful game for kids to learn reading and writing by unscrambling words that match cute, AI-generated images. Features a high score system to encourage learning!",
+  "icons": [
+    {
+      "src": "/icon.png",
+      "type": "image/png",
+      "sizes": "192x192"
+    },
+    {
+      "src": "/icon.png",
+      "type": "image/png",
+      "sizes": "512x512"
+    }
+  ],
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#a5f3fc",
+  "theme_color": "#86efac"
+}
