@@ -2,23 +2,20 @@ import { GoogleGenAI, Type, Modality } from "@google/genai";
 import * as db from '../db/indexedDB';
 import { shuffleArray } from "../utils/wordHelper";
 
-const API_KEY_STORAGE_KEY = 'gemini_api_key';
-
-const getAiClient = (): GoogleGenAI => {
-    const apiKey = localStorage.getItem(API_KEY_STORAGE_KEY);
-    if (!apiKey || apiKey.trim() === '') {
-        throw new Error("API Key not found. Please go to Parent Settings to add it.");
-    }
-    return new GoogleGenAI({ apiKey });
-};
+const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
 
 const handleApiError = (error: unknown, context: string): { error: string } => {
     console.error(`Error in ${context}:`, error);
-    const message = (error as Error).message;
+    const message = (error as Error).message || 'An unknown error occurred';
+
     if (message.includes("API key not valid")) {
-        return { error: "Your API Key is invalid. Please check it in the Parent Settings." };
+        return { error: "The API key is invalid. Please ensure it is configured correctly." };
     }
-    return { error: message }; // This will include "API Key not found..." and other errors.
+    if (message.toLowerCase().includes("quota")) {
+        return { error: "The API quota has been exceeded. Please try again later or check your billing details." };
+    }
+    
+    return { error: message };
 }
 
 
@@ -53,8 +50,6 @@ export async function getImageForWord(word: string): Promise<string | null> {
 
 export async function generateUnapprovedWordAndImage(): Promise<{ word: string; imageUrl: string } | { error: string }> {
     try {
-        const ai = getAiClient();
-        
         const wordResponse = await ai.models.generateContent({
             model: "gemini-2.5-flash",
             contents: "Generate a single, simple, common, 3 to 5 letter English word for a kids reading game. Examples: cat, dog, sun, ball, tree. Just the word, no extra text.",
@@ -87,7 +82,6 @@ export async function generateImageForProvidedWord(word: string): Promise<{ word
     if (await db.getImageForWord(sanitizedWord)) return { error: `'${sanitizedWord.toUpperCase()}' is already in the game!` };
     
     try {
-        const ai = getAiClient();
         const prompt = `A simple, cute, cartoon vector illustration of a '${sanitizedWord}'. Joyful and friendly style for a children's reading game. Bright, vibrant colors. No text, letters, or words. The object should be isolated on a plain light-colored background.`;
         
         const response = await ai.models.generateContent({
@@ -112,7 +106,6 @@ export async function getMathItems(): Promise<db.MathItemRecord[]> {
 
 export async function generateUnapprovedMathItem(): Promise<{ name: string; imageUrl: string } | { error: string }> {
     try {
-        const ai = getAiClient();
         const nameResponse = await ai.models.generateContent({
             model: "gemini-2.5-flash",
             contents: "Generate a single, simple, common object name for a kids' counting game. Examples: apple, star, car, boat, duck. Just the object name, no extra text.",
@@ -148,9 +141,8 @@ export async function generateImageForMathItem(name: string): Promise<{ name: st
     }
 
     try {
-        const ai = getAiClient();
         const prompt = `A single, simple, cute, cartoon vector illustration of a '${sanitizedName}'. For a kids counting game. Joyful and friendly style. Bright, vibrant colors. No text, letters, or words. Isolated on a plain light-colored background.`;
-        const response = await ai.models.generateContent({ model: 'geminai-2.5-flash-image', contents: { parts: [{ text: prompt }] }, config: { responseModalities: [Modality.IMAGE] } });
+        const response = await ai.models.generateContent({ model: 'gemini-2.5-flash-image', contents: { parts: [{ text: prompt }] }, config: { responseModalities: [Modality.IMAGE] } });
         
         const part = response.candidates[0].content.parts.find(p => p.inlineData);
         if (part?.inlineData) {
@@ -171,7 +163,6 @@ export async function getColorItems(): Promise<db.ColorItemRecord[]> {
 
 export async function generateUnapprovedColorItem(): Promise<{ name: string; color: string; imageUrl: string } | { error: string }> {
     try {
-        const ai = getAiClient();
         const itemResponse = await ai.models.generateContent({
             model: "gemini-2.5-flash",
             contents: "Generate a simple, common object and a primary color for it, for a kids' color matching game. Examples: { \"name\": \"apple\", \"color\": \"red\" }, { \"name\": \"frog\", \"color\": \"green\" }. Only return a single JSON object.",
@@ -221,7 +212,6 @@ export async function generateImageForColorItem(name: string, color: string): Pr
     }
 
     try {
-        const ai = getAiClient();
         const prompt = `A simple, cute, cartoon vector illustration of a '${sanitizedName}' that is primarily and clearly the color '${sanitizedColor}'. For a kids color matching game. Joyful and friendly style. No text or other objects. Isolated on a plain light-colored background.`;
         const response = await ai.models.generateContent({ model: 'gemini-2.5-flash-image', contents: { parts: [{ text: prompt }] }, config: { responseModalities: [Modality.IMAGE] } });
 
